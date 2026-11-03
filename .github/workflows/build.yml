@@ -1,0 +1,51 @@
+name: Package PUB-TOOL launcher
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: pub-tool-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify release payload and tag
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $Manifest = Get-Content -LiteralPath 'release-manifest.json' -Raw | ConvertFrom-Json
+          if ('${{ github.ref_type }}' -eq 'tag' -and '${{ github.ref_name }}' -ne ('v' + $Manifest.version)) { throw 'Tag does not match release manifest.' }
+          foreach ($Entry in $Manifest.files) {
+            $Target = [IO.Path]::GetFullPath((Join-Path $PWD $Entry.path))
+            $Prefix = $PWD.Path.TrimEnd('\') + '\'
+            if (-not $Target.StartsWith($Prefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Manifest path escapes checkout.' }
+            if ((Get-FileHash -LiteralPath $Target -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Entry.sha256) { throw "Hash mismatch: $($Entry.path)" }
+          }
+          foreach ($File in @('main.py','database/schema.sql','frontend/dist/index.html','frontend/dist/app.js','frontend/dist/app.css','pyappify.yml','requirements-desktop.txt')) {
+            if (-not (Test-Path -LiteralPath $File -PathType Leaf)) { throw "Missing runtime file: $File" }
+          }
+      - name: Build launcher using the OK pyappify action
+        uses: ok-oldking/pyappify-action@6f51f561b219904fa08a86fb969bbe17eeee38fc
+        with:
+          version: 'v1.2.3'
+      - name: Keep package for manual verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: PUB-TOOL-launcher
+          path: pyappify_dist/*
+          if-no-files-found: error
+      - name: Publish launcher packages
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: pyappify_dist/*

@@ -1,0 +1,193 @@
+from __future__ import annotations
+
+import json
+import sys
+from datetime import datetime
+from pathlib import Path
+
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, QUrl, Signal, Slot, QMimeData
+from PySide6.QtGui import QDesktopServices, QTextDocument
+from PySide6.QtWidgets import QApplication, QFileDialog, QMainWindow, QMessageBox
+from PySide6.QtWebChannel import QWebChannel
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
+from PySide6.QtWebEngineWidgets import QWebEngineView
+
+from ..workspace.store import RevisionConflict, WorkspaceStore, application_data_dir
+from .service import DesktopService, pubmed_url
+
+
+class JobSignals(QObject):
+    finished = Signal(str)
+
+
+class Job(QRunnable):
+    def __init__(self, service, envelope):
+        super().__init__()
+        self.service, self.envelope = service, envelope
+        self.signals = JobSignals()
+
+    def run(self):
+        ident = self.envelope.get("id")
+        try:
+            result = self.service.call(self.envelope["action"], self.envelope.get("payload", {}))
+            response = {"id": ident, "ok": True, "result": result}
+        except Exception as exc:
+            response = {"id": ident, "ok": False, "error": str(exc),
+                        "code": "REVISION_CONFLICT" if isinstance(exc, RevisionConflict) else "REQUEST_FAILED"}
+        self.signals.finished.emit(json.dumps(response, ensure_ascii=False))
+
+
+class Bridge(QObject):
+    response = Signal(str)
+
+    def __init__(self, service, parent=None):
+        super().__init__(parent)
+        self.service = service
+        self.dirty = False
+        self.jobs = {}
+        self.pool = QThreadPool(self)
+        self.pool.setMaxThreadCount(1)
+
+    @Slot(bool)
+    def setDirty(self, dirty):
+        self.dirty = dirty
+
+    @Slot(str, result=bool)
+    def copyHtml(self, html):
+        if len(html) > 20_000_000:
+            return False
+        mime = QMimeData()
+        mime.setHtml(html)
+        document = QTextDocument()
+        document.setHtml(html)
+        mime.setText(document.toPlainText())
+        QApplication.clipboard().setMimeData(mime)
+        return True
+
+    @Slot(str)
+    def openPubMed(self, query):
+        try:
+            QDesktopServices.openUrl(QUrl(pubmed_url(query)))
+        except ValueError:
+            pass
+
+    @Slot(str)
+    def request(self, raw):
+        envelope = None
+        try:
+            if len(raw) > 2_500_000:
+                raise ValueError("請求過大")
+            envelope = json.loads(raw)
+            if not isinstance(envelope, dict) or not isinstance(envelope.get("id"), str) or len(envelope["id"]) > 100:
+                raise ValueError("無效請求")
+            if envelope["id"] in self.jobs or len(self.jobs) >= 8:
+                raise ValueError("請等待目前操作完成")
+            if envelope.get('action') == 'export_excel':
+                payload = envelope.get('payload', {})
+                if not isinstance(payload, dict):
+                    raise ValueError('匯出參數無效')
+                suggested = 'PUB-TOOL_' + datetime.now().strftime('%Y%m%d_%H%M%S_%f') + '.xlsx'
+                filename, _ = QFileDialog.getSaveFileName(self.parent(), '匯出文獻與摘要', suggested, 'Excel (*.xlsx)')
+                if not filename:
+                    self.response.emit(json.dumps({'id': envelope['id'], 'ok': True, 'result': {'cancelled': True}}))
+                    return
+                if not filename.lower().endswith('.xlsx'):
+                    filename += '.xlsx'
+                # Always replace caller-provided target with native dialog choice.
+                envelope['payload'] = {**payload, 'target': filename}
+            job = Job(self.service, envelope)
+            self.jobs[envelope["id"]] = job
+            job.signals.finished.connect(self.complete)
+            self.pool.start(job)
+        except (ValueError, TypeError) as exc:
+            ident = envelope.get("id") if isinstance(envelope, dict) else None
+            self.response.emit(json.dumps({"id": ident, "ok": False, "error": str(exc)}))
+
+    @Slot(str)
+    def complete(self, raw):
+        self.jobs.pop(json.loads(raw)["id"], None)
+        self.response.emit(raw)
+
+
+class LocalAssetsOnly(QWebEngineUrlRequestInterceptor):
+    def __init__(self, assets, parent=None):
+        super().__init__(parent)
+        self.assets = assets.resolve()
+
+    def interceptRequest(self, info):
+        url = info.requestUrl()
+        if url.scheme() in {"data", "blob", "qrc"}:
+            return
+        if url.isLocalFile() and Path(url.toLocalFile()).resolve().is_relative_to(self.assets):
+            return
+        info.block(True)
+
+
+class LocalPage(QWebEnginePage):
+    def __init__(self, profile, index, parent):
+        super().__init__(profile, parent)
+        self.index = index.resolve()
+
+    def acceptNavigationRequest(self, url, nav_type, is_main_frame):
+        if url.scheme() == "blob":
+            return True  # JSON draft downloads generated by this page.
+        return url.isLocalFile() and Path(url.toLocalFile()).resolve() == self.index
+
+
+class MainWindow(QMainWindow):
+    def __init__(self, service, assets):
+        super().__init__()
+        self.setWindowTitle("PUB-TOOL · Literature Workspace")
+        self.resize(1500, 950)
+        self.bridge = Bridge(service, self)
+        self.view = QWebEngineView(self)
+        self.profile = QWebEngineProfile(self)  # off-the-record; no shared browser state
+        self.interceptor = LocalAssetsOnly(assets, self)
+        self.profile.setUrlRequestInterceptor(self.interceptor)
+        self.page = LocalPage(self.profile, assets / "index.html", self)
+        self.view.setPage(self.page)
+        self.channel = QWebChannel(self.page)
+        self.channel.registerObject("desktop", self.bridge)
+        self.page.setWebChannel(self.channel)
+        self.profile.downloadRequested.connect(self.download)
+        self.setCentralWidget(self.view)
+        self.view.load(QUrl.fromLocalFile(str((assets / "index.html").resolve())))
+
+    def download(self, download):
+        filename, _ = QFileDialog.getSaveFileName(self, "匯出工作區草稿", download.suggestedFileName(), "JSON (*.json)")
+        if filename:
+            path = Path(filename)
+            download.setDownloadDirectory(str(path.parent))
+            download.setDownloadFileName(path.name)
+            download.accept()
+        else:
+            download.cancel()
+
+    def closeEvent(self, event):
+        if self.bridge.jobs:
+            QMessageBox.information(self, "操作進行中", "請等待目前操作完成後再關閉。")
+            event.ignore()
+        elif self.bridge.dirty:
+            QMessageBox.information(self, "尚未儲存", "請先儲存或在介面按「還原」處理草稿，再關閉。")
+            event.ignore()
+        else:
+            event.accept()
+
+
+def main() -> int:
+    root = Path(__file__).resolve().parents[3]
+    assets = root / "frontend" / "dist"
+    app = QApplication(sys.argv)
+    app.setApplicationName("PUB-TOOL")
+    app.setOrganizationName("PUB-TOOL")
+    if not (assets / "index.html").is_file():
+        QMessageBox.critical(None, "尚未建置前端", "請先執行 tools/Build-Frontend.ps1，詳見 docs/desktop-app.md。")
+        return 1
+    store = WorkspaceStore(application_data_dir() / "literature.sqlite3")
+    window = MainWindow(DesktopService(store, root), assets)
+    window.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
