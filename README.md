@@ -2,7 +2,7 @@
 
 PUB-TOOL is a Windows desktop workspace for biomedical literature searches:
 MeSH/PubChem alias lookup, editable PubMed query graphs, title/abstract retrieval,
-manual screening and Excel export.
+manual screening, Excel/EndNote RIS export, and a local-model connection interface.
 
 ## Install and launch
 
@@ -27,6 +27,16 @@ This repository contains only update runtime content and release packaging
 metadata. Full development history, tests, tools, local databases, logs and
 credentials are not published here. Runtime Python and bundled JavaScript files
 are necessarily visible in this source-based update model.
+
+Debug Python support modules are intentionally included in the runtime payload.
+Normal Launcher starts keep developer mode off; source-write/local-Git actions
+also require a separate development checkout marker, which is not distributed.
+The source Debug entry, Vite server, frontend sources, tests and packaging tools
+are not part of an application update. Launcher EXE customizations need a local
+Launcher rebuild. Model weights/LM Studio are managed separately.
+
+The release manifest records payload SHA-256 hashes and distribution boundaries.
+See [CHANGELOG](CHANGELOG.md) for the changes in each runtime release.
 
 ## User data
 

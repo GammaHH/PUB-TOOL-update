@@ -126,6 +126,15 @@ CREATE TABLE IF NOT EXISTS workspace_revisions (
     created_at TEXT NOT NULL,
     PRIMARY KEY(project_id, revision)
 );
+CREATE TABLE IF NOT EXISTS workspace_history_preferences (
+    project_id INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    auto_prune INTEGER NOT NULL DEFAULT 0 CHECK (auto_prune IN (0, 1)),
+    keep_latest INTEGER NOT NULL DEFAULT 20 CHECK (keep_latest BETWEEN 1 AND 1000)
+);
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value_json TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_aliases_term ON aliases(term_id);
 CREATE INDEX IF NOT EXISTS idx_articles_doi ON articles(doi);
 CREATE INDEX IF NOT EXISTS idx_articles_pmcid ON articles(pmcid);

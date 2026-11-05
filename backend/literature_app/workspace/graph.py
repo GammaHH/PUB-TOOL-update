@@ -14,6 +14,7 @@ def validate_graph(value: object) -> dict:
     if not isinstance(nodes, list) or not isinstance(edges, list) or len(nodes) > 200 or len(edges) > 500:
         raise ValueError("畫布最多 200 個節點、500 條連線")
     ids: set[str] = set()
+    node_numbers: set[int] = set()
     clean_nodes = []
     for node in nodes:
         if not isinstance(node, dict):
@@ -23,6 +24,11 @@ def validate_graph(value: object) -> dict:
             raise ValueError("節點 ID 重複或無效")
         if kind != "queryNode" or not isinstance(data, dict) or data.get("kind") not in {"concept", "and", "or", "output"}:
             raise ValueError("不支援的節點種類")
+        if "node_number" in data:
+            number = data["node_number"]
+            if type(number) is not int or not 1 <= number <= 1_000_000_000 or number in node_numbers:
+                raise ValueError("節點編號需為不重複的正整數（上限 1000000000）")
+            node_numbers.add(number)
         pos = node.get("position", {})
         if not isinstance(pos, dict) or any(type(pos.get(axis)) not in (float, int) or not math.isfinite(pos[axis]) or abs(pos[axis]) > 100000 for axis in ("x", "y")):
             raise ValueError("節點座標無效")
@@ -43,7 +49,7 @@ def validate_graph(value: object) -> dict:
         if "resolution" in data:
             _validate_resolution(data["resolution"])
         ids.add(ident)
-        clean_nodes.append({"id": ident, "type": kind, "position": {k: pos[k] for k in ("x", "y")}, "data": data})
+        clean_nodes.append({"id": ident, "type": kind, "position": {k: pos[k] for k in ("x", "y")}, "data": {key: entry for key, entry in data.items() if key != "_runtime"}})
     node_map = {n["id"]: n for n in clean_nodes}
     edge_ids, pairs, clean_edges = set(), set(), []
     for edge in edges:
@@ -115,11 +121,14 @@ def _validate_resolution(result):
         raise ValueError("解析候選資料無效")
 
 
-def compile_graph(value: object) -> dict:
+def compile_graph(value: object, *, _node_states: dict | None = None) -> dict:
     graph = validate_graph(value)
     nodes = {n["id"]: n for n in graph["nodes"]}
     outputs = [n for n in graph["nodes"] if n["data"]["kind"] == "output"]
     if len(outputs) != 1:
+        if _node_states is not None:
+            for node in outputs:
+                _node_states[node["id"]] = {"state": "error", "detail": "畫布需恰好一個搜尋式節點"}
         raise ValueError("產生搜尋式需恰好一個「搜尋式」節點")
     incoming = defaultdict(list)
     order = {n["id"]: i for i, n in enumerate(graph["nodes"])}
@@ -129,6 +138,21 @@ def compile_graph(value: object) -> dict:
 
     def render(ident):
         used.add(ident)
+        if _node_states is not None:
+            _node_states[ident] = {"state": "running", "detail": "正在驗證搜尋條件"}
+        try:
+            result = render_node(ident)
+        except ValueError as exc:
+            if _node_states is not None:
+                _node_states[ident] = {"state": "error", "detail": str(exc)}
+            raise
+        if _node_states is not None:
+            kind = nodes[ident]["data"]["kind"]
+            detail = {"concept": "已驗證選取詞彙", "and": "已合併 AND 條件", "or": "已合併 OR 條件", "output": "搜尋式已產生"}[kind]
+            _node_states[ident] = {"state": "success", "detail": detail}
+        return result
+
+    def render_node(ident):
         data = nodes[ident]["data"]
         kind = data["kind"]
         if kind == "concept":
@@ -148,3 +172,14 @@ def compile_graph(value: object) -> dict:
     query = render(outputs[0]["id"])
     unused = [n["data"].get("label", n["id"]) for n in graph["nodes"] if n["id"] not in used]
     return {"query": query, "warnings": ["未連到輸出的節點未納入搜尋式：" + "、".join(unused)] if unused else []}
+
+
+def compile_graph_with_status(value: object) -> dict:
+    nodes = value.get("nodes", []) if isinstance(value, dict) else []
+    states = {n["id"]: {"state": "idle", "detail": "未納入此次產生"}
+              for n in nodes if isinstance(n, dict) and isinstance(n.get("id"), str)} if isinstance(nodes, list) else {}
+    try:
+        result = compile_graph(value, _node_states=states)
+        return {"ok": True, **result, "node_states": states}
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc), "node_states": states}

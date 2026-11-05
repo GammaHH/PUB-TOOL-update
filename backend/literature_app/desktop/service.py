@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import httpx
@@ -9,18 +11,26 @@ import httpx
 from ..api.providers import HttpxMeshProvider, HttpxPubChemProvider
 from ..resolver.cli import _jsonable
 from ..resolver.service import TermResolver
-from ..workspace.graph import compile_graph, validate_graph
+from ..workspace.graph import compile_graph, compile_graph_with_status, validate_graph
 from ..workspace.store import WorkspaceStore
 from ..workspace.literature import LiteratureStore
 from ..api.pubmed import PubMedClient
 from ..workspace.excel_export import export_xlsx
+from ..workspace.endnote_export import export_ris
+from .rendering import rendering_preferences, set_rendering_preferences
+from .style_settings import style_settings, save_style_settings, validate_style_values
+from .development import DeveloperRepository
+from .model_settings import local_model_settings, save_local_model_settings
+from ..api.local_model import LocalModelClient, validate_model_settings, model_http_client
 
 
 class DesktopService:
     """Explicit RPC allowlist shared by the desktop bridge and offline tests."""
 
-    def __init__(self, store: WorkspaceStore, root: Path):
+    def __init__(self, store: WorkspaceStore, root: Path, developer_mode: bool = False):
         self.store, self.root = store, root
+        self.developer_mode = developer_mode
+        self.development = DeveloperRepository(root) if developer_mode else None
         self.literature = LiteratureStore(store)
 
     def call(self, action: str, payload: dict):
@@ -33,12 +43,61 @@ class DesktopService:
                     "data_dir": str(self.store.path.parent), "database": str(self.store.path),
                     "update_repository": release.get("update_repository"),
                     "update_preferences_available": bool(os.getenv("PYAPPIFY_APP_JSON_PATH")),
+                    "developer_mode": self.developer_mode,
+                    "source_root": str(self.root) if self.developer_mode else None,
+                    "runtime": {"python": sys.version.split()[0], "executable": sys.executable, "pyside": _package_version("PySide6")},
+                    "style_settings": style_settings(self.store),
                     "capabilities": {"resolver": True, "query_canvas": True, "pubmed_fetch": True},
                     "projects": self.store.list_projects()}
         if action == "projects":
             return self.store.list_projects()
+        if action == "rendering_preferences":
+            return rendering_preferences(self.store.path.parent)
+        if action == "local_model_settings":
+            return local_model_settings(self.store)
+        if action == "save_local_model_settings":
+            return save_local_model_settings(self.store, payload.get("settings"))
+        if action in {"local_model_models", "local_model_test"}:
+            settings = (validate_model_settings(payload["settings"]) if action == "local_model_models" and "settings" in payload
+                        else local_model_settings(self.store)["settings"])
+            with model_http_client(settings) as client:
+                model = LocalModelClient(client, settings)
+                if action == "local_model_models":
+                    return {"models": model.models()}
+                return model.complete([{"role": "user", "content": "Reply with PUB-TOOL connection OK."}])
+        if action == "style_settings":
+            return style_settings(self.store)
+        if action == "validate_style_settings":
+            return validate_style_values(payload.get("values"))
+        if action == "save_style_settings":
+            return save_style_settings(self.store, payload.get("values"))
+        if action == "set_rendering_preferences":
+            return set_rendering_preferences(self.store.path.parent, payload.get("render_mode"))
+        if action == "debug_validate":
+            if not self.developer_mode:
+                raise ValueError("此操作需以 main_debug.py 啟用開發者模式")
+            query = payload.get("query", "")
+            if not isinstance(query, str) or len(query) > 100_000:
+                raise ValueError("搜尋式過長或無效")
+            graph = validate_graph(payload.get("graph"))
+            try:
+                compiled = compile_graph(graph)
+                diagnostic = {"generated_query": compiled["query"], "warnings": compiled["warnings"], "compile_error": None}
+            except ValueError as exc:
+                diagnostic = {"generated_query": None, "warnings": [], "compile_error": str(exc)}
+            return {"graph": graph, "query": query, **diagnostic}
+        if action in {"debug_git_status", "debug_git_prepare", "debug_git_commit"}:
+            if not self.developer_mode or self.development is None:
+                raise ValueError("此操作需以 main_debug.py 啟用開發者模式")
+            if action == "debug_git_status":
+                return self.development.status()
+            if action == "debug_git_prepare":
+                return self.development.prepare(payload.get("name"), payload.get("edits", []))
+            return self.development.commit(payload.get("token"))
         if action == 'export_excel':
             return export_xlsx(self.store, int(payload['project_id']), int(payload['run_id']), Path(payload['target']), payload.get('scope', 'ALL'))
+        if action == 'export_endnote':
+            return export_ris(self.store, int(payload['project_id']), int(payload['run_id']), Path(payload['target']), payload.get('scope', 'ALL'))
         if action == 'pubmed_search':
             project_id = int(payload['project_id'])
             self.store.load(project_id)
@@ -76,10 +135,18 @@ class DesktopService:
             return self.store.save(int(payload["project_id"]), int(payload["expected_revision"]), payload["graph"], payload.get("query", ""))
         if action == "history":
             return self.store.history(int(payload["project_id"]))
+        if action == "history_preferences":
+            return self.store.history_preferences(int(payload["project_id"]))
+        if action == "set_history_preferences":
+            return self.store.set_history_preferences(int(payload["project_id"]), payload.get("auto_prune"), payload.get("keep_latest"))
+        if action == "delete_revision":
+            return self.store.delete_revision(int(payload["project_id"]), payload.get("revision"), payload.get("expected_revision"))
         if action == "validate_graph":
             return validate_graph(payload["graph"])
         if action == "compile":
             return compile_graph(payload["graph"])
+        if action == "compile_with_status":
+            return compile_graph_with_status(payload["graph"])
         if action == "resolve":
             term = payload.get("term")
             if not isinstance(term, str) or not term.strip() or len(term) > 300:
@@ -103,6 +170,13 @@ class DesktopService:
                 api.update(update_method=method)
             return {"available": True, **api.get()}
         raise ValueError("不支援的操作")
+
+
+def _package_version(name: str) -> str | None:
+    try:
+        return version(name)
+    except PackageNotFoundError:
+        return None
 
 
 def pubmed_url(query: str) -> str:

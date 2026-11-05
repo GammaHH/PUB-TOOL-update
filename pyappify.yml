@@ -1,4 +1,6 @@
 name: "PUB-TOOL"
+launcher_only_shortcuts: true
+launcher_rendering_settings: true
 uac: false
 website: "https://github.com/GammaHH/PUB-TOOL-update/releases"
 profiles:
