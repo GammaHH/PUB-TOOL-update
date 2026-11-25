@@ -1,30 +1,18 @@
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
-import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 from ..database.connection import initialize_database
 from .graph import validate_graph
+from pubtool_core.paths import application_data_dir
 
 
 class RevisionConflict(ValueError):
-    pass
-
-
-def application_data_dir() -> Path:
-    override = os.getenv("PUB_TOOL_DATA_DIR")
-    if override:
-        return Path(override).expanduser().resolve()
-    if sys.platform == "win32":
-        return Path(os.getenv("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "PUB-TOOL"
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "PUB-TOOL"
-    return Path(os.getenv("XDG_DATA_HOME", str(Path.home() / ".local" / "share"))) / "pub-tool"
+    rpc_code = "REVISION_CONFLICT"
 
 
 class WorkspaceStore:
@@ -50,8 +38,48 @@ class WorkspaceStore:
                 SELECT p.id, p.name, p.description, p.updated_at,
                     COALESCE(MAX(w.revision), 0) AS revision
                 FROM projects p LEFT JOIN workspace_revisions w ON w.project_id=p.id
+                WHERE NOT EXISTS (SELECT 1 FROM app_settings s WHERE s.key='project_trash:' || p.id)
                 GROUP BY p.id ORDER BY p.updated_at DESC, p.id DESC
             """)]
+
+    def list_trashed_projects(self) -> list[dict]:
+        with self._connect() as connection:
+            items = [dict(row) for row in connection.execute('''
+                SELECT p.id,p.name,p.description,p.updated_at,s.value_json,
+                    COALESCE(MAX(w.revision),0) AS revision
+                FROM projects p JOIN app_settings s ON s.key='project_trash:' || p.id
+                LEFT JOIN workspace_revisions w ON w.project_id=p.id
+                GROUP BY p.id ORDER BY p.id DESC''')]
+        for item in items:
+            item['trashed_at'] = json.loads(item.pop('value_json'))['trashed_at']
+        return sorted(items, key=lambda item: item['trashed_at'], reverse=True)
+
+    def require_active_project(self, project_id, connection=None):
+        if connection is None:
+            with self._connect() as db:
+                return self.require_active_project(project_id, db)
+        if not connection.execute('SELECT 1 FROM projects WHERE id=?', (project_id,)).fetchone():
+            raise ValueError('找不到專案')
+        if connection.execute('SELECT 1 FROM app_settings WHERE key=?', ('project_trash:' + str(project_id),)).fetchone():
+            raise ValueError('專案已移到垃圾桶，請先還原')
+
+    def trash_project(self, project_id: int) -> dict:
+        stamp = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            if not connection.execute('SELECT 1 FROM projects WHERE id=?', (project_id,)).fetchone():
+                raise ValueError('找不到專案')
+            connection.execute('INSERT INTO app_settings(key,value_json) VALUES(?,?) ON CONFLICT(key) DO NOTHING',
+                ('project_trash:' + str(project_id), json.dumps({'trashed_at': stamp})))
+        return {'trashed': True, 'project_id': project_id}
+
+    def restore_project(self, project_id: int) -> dict:
+        with self._connect() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            if not connection.execute('SELECT 1 FROM projects WHERE id=?', (project_id,)).fetchone():
+                raise ValueError('找不到專案')
+            connection.execute('DELETE FROM app_settings WHERE key=?', ('project_trash:' + str(project_id),))
+        return {'restored': True, 'project_id': project_id}
 
     def create_project(self, name: str) -> dict:
         if not isinstance(name, str) or not name.strip() or len(name) > 120:
@@ -64,6 +92,8 @@ class WorkspaceStore:
 
     def load(self, project_id: int, revision: int | None = None) -> dict:
         with self._connect() as connection:
+            # TransferFile borrows this reader without initializing the live store.
+            WorkspaceStore.require_active_project(self, project_id, connection)
             project = connection.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
             if project is None:
                 raise ValueError("找不到專案")
@@ -84,8 +114,7 @@ class WorkspaceStore:
         now = datetime.now(timezone.utc).isoformat()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            if not connection.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
-                raise ValueError("找不到專案")
+            self.require_active_project(project_id, connection)
             current = connection.execute("SELECT COALESCE(MAX(revision),0) FROM workspace_revisions WHERE project_id=?", (project_id,)).fetchone()[0]
             if current != expected_revision:
                 raise RevisionConflict("專案已由其他視窗更新。請先匯出草稿，再重新載入。")

@@ -1,0 +1,19 @@
+{
+  "format": 1,
+  "api_min": 1,
+  "api_max": 1,
+  "assets": [
+    {
+      "path": "index.html",
+      "sha256": "e96fa672b90d1d667c83b7b4e6e2a7475d95d5bc89ab22a62fabbea6cf0d6c54"
+    },
+    {
+      "path": "app.js",
+      "sha256": "0998c5786e3b952357d2bc834400b0951fc9085c47e073d2511b574cb3b7ffdb"
+    },
+    {
+      "path": "app.css",
+      "sha256": "7d4dbfd17508b399d6ce2b705fd11f457268c11c80dacbecaeb78d62f50d5dc8"
+    }
+  ]
+}

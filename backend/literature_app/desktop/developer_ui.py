@@ -73,7 +73,7 @@ class DeveloperControls(QObject):
         window.setMenuWidget(widget)
         self.bridge.response.connect(self.response)
         self.bridge.reloadRequested.connect(self.request_reload)
-        self.bridge.developerMessage.connect(self.message)
+        self.bridge.coreMessage.connect(self.message)
         self.bridge.dirtyChanged.connect(lambda _: self.resume_reload())
         self.page.loadFinished.connect(self.loaded)
         self.reload_timer = QTimer(self)
@@ -238,11 +238,12 @@ class DeveloperControls(QObject):
         self.page.triggerAction(self.page.WebAction.ReloadAndBypassCache)
 
     def backend_sources(self):
-        files = [self.root / "main.py", *self.root.glob("backend/literature_app/**/*.py")]
+        files = [self.root / "main.py", *self.root.glob("backend/literature_app/**/*.py"), *self.root.glob("backend/pubtool_core/**/*.py")]
         return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in files if p.is_file()}
 
     def watch_backend(self):
-        directories = [self.root / "backend/literature_app", *self.root.glob("backend/literature_app/**/")]
+        directories = [self.root / "backend/literature_app", *self.root.glob("backend/literature_app/**/"),
+                       self.root / "backend/pubtool_core", *self.root.glob("backend/pubtool_core/**/")]
         candidates = {str(p) for p in directories if p.is_dir() and "__pycache__" not in p.parts}
         candidates.update(p for p in self.backend_state if (self.root / p).is_file())
         existing = set(self.watcher.files() + self.watcher.directories())

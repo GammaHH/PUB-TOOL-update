@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from .literature import LiteratureStore
+from .literature import LiteratureStore, abstract_state
 
 
 def ris_field(tag: str, value) -> str:
@@ -67,7 +67,7 @@ def export_ris(store, project_id: int, run_id: int, target: Path, scope="ALL"):
             output.append(ris_field("AU", author))
         for keyword in dict.fromkeys(json.loads(article["mesh_terms_json"] or "[]") + json.loads(article["keywords_json"] or "[]")):
             output.append(ris_field("KW", keyword))
-        abstract_status = "AVAILABLE" if article["abstract"] else "NO_ABSTRACT"
+        abstract_status = abstract_state(article['abstract'], article['fetched_at'])
         for note in (f"PUB-TOOL run {run_id}; screening={article['screening_status']}; abstract={abstract_status}",
                      "Original query: " + run["query"], "Notes: " + article["notes"],
                      "Exclusion reason: " + article["reason"], "PMCID: " + (article["pmcid"] or "")):

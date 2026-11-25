@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "package_id": "PUB-TOOL",
+  "package_version": "0.3.2",
+  "requires_core": {
+    "min_version": "0.4.0",
+    "api_min": 1,
+    "api_max": 1,
+    "capabilities": [
+      "rpc",
+      "native.save_file",
+      "native.clipboard_html",
+      "native.open_url",
+      "lifecycle",
+      "webchannel",
+      "rendering",
+      "package.extensions"
+    ]
+  },
+  "backend_root": "backend",
+  "entrypoint": "literature_app.desktop.package:create_package",
+  "frontend_root": "frontend/dist",
+  "frontend_entry": "index.html",
+  "database": {
+    "filename": "literature.sqlite3",
+    "min_schema": 0,
+    "max_schema": 1,
+    "target_schema": 1
+  }
+}

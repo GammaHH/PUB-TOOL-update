@@ -6,20 +6,29 @@ import json
 from datetime import datetime, timezone
 
 from .store import WorkspaceStore
+from .bibliography_errors import read_errors
+from .screening_history import snapshot, write_snapshot, entries, save_entry, event, prefix
 
 
 def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def abstract_state(abstract, fetched_at, fetch_error=None):
+    """An imported citation is not evidence that PubMed returned no abstract."""
+    if not fetched_at:
+        return 'FETCH_FAILED' if fetch_error else 'NOT_FETCHED'
+    return 'AVAILABLE' if abstract else 'NO_ABSTRACT'
+
+
 class LiteratureStore:
     def __init__(self, store: WorkspaceStore):
         self.store = store
 
-    def save_search(self, project_id, result):
+    def save_search(self, project_id, result, *, app_version="0.3.0"):
         with self.store._connect() as db:
             run = db.execute('INSERT INTO search_runs(project_id,query,query_hash,database_name,searched_at,result_count,app_version,history_server,history_key) VALUES(?,?,?,?,?,?,?,?,?)',
-                             (project_id, result['query'], hashlib.sha256(result['query'].encode()).hexdigest(), 'pubmed', now(), result['count'], '0.3.0', result['webenv'], result['querykey'])).lastrowid
+                             (project_id, result['query'], hashlib.sha256(result['query'].encode()).hexdigest(), 'pubmed', now(), result['count'], app_version, result['webenv'], result['querykey'])).lastrowid
             db.executemany('INSERT INTO search_run_pmids VALUES(?,?,?)', [(run, p, i) for i, p in enumerate(result['pmids'])])
             db.execute('INSERT INTO pubmed_run_details VALUES(?,?,?,?,?)', (run, len(result['pmids']), result['limit'], result['translation'], json.dumps(result['warnings'], ensure_ascii=False)))
         return run
@@ -40,7 +49,7 @@ class LiteratureStore:
             self.require_run(db, project_id, run_id)
             rows = db.execute('''SELECT m.pmid FROM search_run_pmids m LEFT JOIN articles a ON a.pmid=m.pmid
                 LEFT JOIN pubmed_fetch_failures f ON f.run_id=m.search_run_id AND f.pmid=m.pmid
-                WHERE m.search_run_id=? AND a.id IS NULL AND
+                WHERE m.search_run_id=? AND COALESCE(a.fetched_at,'')='' AND
                 ((?=1 AND f.pmid IS NOT NULL) OR (?=0 AND f.pmid IS NULL)) ORDER BY m.ordinal LIMIT 50''', (run_id, int(include_failed), int(include_failed)))
             return [r['pmid'] for r in rows]
 
@@ -73,8 +82,10 @@ class LiteratureStore:
                 LEFT JOIN screenings s ON s.article_id=a.id AND s.project_id=?
                 LEFT JOIN pubmed_fetch_failures f ON f.run_id=m.search_run_id AND f.pmid=m.pmid
                 WHERE m.search_run_id=? ORDER BY m.ordinal''', (project_id, run_id))]
+            errors = read_errors(db, project_id)
         for row in rows:
-            row['abstract_status'] = 'FETCH_FAILED' if row['article_id'] is None and row['fetch_error'] else 'NOT_FETCHED' if row['article_id'] is None else 'AVAILABLE' if row['abstract'] else 'NO_ABSTRACT'
+            row['abstract_status'] = abstract_state(row['abstract'], row['fetched_at'], row['fetch_error'])
+            row['bibliography_error'] = errors.get(row['pmid'])
         return rows
 
     def screen(self, project_id, run_id, pmid, status, notes, reason):
@@ -85,13 +96,53 @@ class LiteratureStore:
         if status == 'EXCLUDE' and not reason.strip():
             raise ValueError('排除需填寫理由')
         with self.store._connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            self.store.require_active_project(project_id, db)
             self.require_run(db, project_id, run_id)
             row = db.execute('SELECT a.id FROM articles a JOIN search_run_pmids m ON m.pmid=a.pmid WHERE m.search_run_id=? AND a.pmid=?', (run_id, pmid)).fetchone()
             if row is None:
                 raise ValueError('文章尚未抓取或不在此搜尋紀錄')
-            db.execute('''INSERT INTO screenings(project_id,article_id,status,notes,exclusion_reason,reviewed_at) VALUES(?,?,?,?,?,?)
-                ON CONFLICT(project_id,article_id) DO UPDATE SET status=excluded.status,notes=excluded.notes,exclusion_reason=excluded.exclusion_reason,reviewed_at=excluded.reviewed_at''',
-                       (project_id, row['id'], status, notes, reason if status == 'EXCLUDE' else '', now()))
+            before = snapshot(db, project_id, row['id'])
+            after = {'status': status, 'notes': notes, 'exclusion_reason': reason if status == 'EXCLUDE' else '', 'reviewed_at': now()}
+            if before is not None and all(before[key] == after[key] for key in ('status', 'notes', 'exclusion_reason')):
+                return
+            write_snapshot(db, project_id, row['id'], after)
+            save_entry(db, project_id, event(pmid, before, after))
+
+    def screening_history(self, project_id, limit=25):
+        if type(limit) is not int or not 1 <= limit <= 500:
+            raise ValueError('歷史顯示筆數需為 1–500')
+        with self.store._connect() as db:
+            db.execute('BEGIN')
+            self.store.require_active_project(project_id, db)
+            history = entries(db, project_id)
+            history.sort(key=lambda item: (item['changed_at'], item['id']), reverse=True)
+            visible = []
+            for item in history[:limit]:
+                article = db.execute('SELECT id,title FROM articles WHERE pmid=?', (item['pmid'],)).fetchone()
+                can_undo = article is not None and not item.get('undone_by') and snapshot(db, project_id, article['id']) == item['after']
+                visible.append({**item, 'title': article['title'] if article else None, 'can_undo': can_undo})
+        return {'total': len(history), 'items': visible}
+
+    def undo_screening(self, project_id, event_id):
+        if not isinstance(event_id, str) or len(event_id) != 32 or any(char not in '0123456789abcdef' for char in event_id):
+            raise ValueError('歷史 ID 無效')
+        with self.store._connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            self.store.require_active_project(project_id, db)
+            row = db.execute('SELECT value_json FROM app_settings WHERE key=?', (prefix(project_id) + event_id,)).fetchone()
+            if row is None:
+                raise ValueError('找不到此專案的篩選歷史')
+            original = json.loads(row[0])
+            article = db.execute('SELECT id FROM articles WHERE pmid=?', (original['pmid'],)).fetchone()
+            if original.get('undone_by') or article is None or snapshot(db, project_id, article['id']) != original['after']:
+                raise ValueError('此紀錄已撤銷或該篇有較新的變更，請重新整理歷史')
+            inverse = event(original['pmid'], original['after'], original['before'], 'undo', original['id'])
+            write_snapshot(db, project_id, article['id'], original['before'])
+            original['undone_by'] = inverse['id']
+            save_entry(db, project_id, original)
+            save_entry(db, project_id, inverse)
+        return {'undone': True, 'pmid': original['pmid']}
 
     def export_html(self, project_id, run_id, only_kept=False, pmid=None):
         with self.store._connect() as db:

@@ -10,7 +10,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
-from .literature import LiteratureStore
+from .literature import LiteratureStore, abstract_state
 
 
 HEADERS = [
@@ -69,7 +69,7 @@ def export_xlsx(store, project_id: int, run_id: int, target: Path, scope: str = 
         put(ws, 1, col, title, 'Headers', title)
     for index, a in enumerate(chosen, 2):
         pmid = a['member_pmid']
-        status = ('FETCH_FAILED' if a['fetch_error'] else 'NOT_FETCHED') if a['id'] is None else ('AVAILABLE' if a['abstract'] else 'NO_ABSTRACT')
+        status = abstract_state(a['abstract'], a['fetched_at'], a['fetch_error'])
         def unpack(key):
             return '; '.join(json.loads(a[key])) if a[key] else None
         values = [a['ordinal'] + 1, pmid, a['title'], a['abstract'], status, unpack('authors_json'),
@@ -83,7 +83,7 @@ def export_xlsx(store, project_id: int, run_id: int, target: Path, scope: str = 
         ws.row_dimensions[index].height = 110
     exported_at = datetime.now(timezone.utc).isoformat()
     metadata = [
-        ('Project', project), ('Project ID', project_id), ('Run ID', run_id), ('Original query', run['query']),
+        ('Project', project), ('Project ID', project_id), ('Run ID', run_id), ('Package version', run['app_version']), ('Original query', run['query']),
         ('Query translation', details['query_translation']), ('Query hash SHA256', run['query_hash']),
         ('Searched UTC', run['searched_at']), ('NCBI total count', run['result_count']),
         ('Collected PMID count', details['collected_count']), ('Requested limit', details['requested_limit']),

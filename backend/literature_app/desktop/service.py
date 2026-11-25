@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-import sys
-from importlib.metadata import PackageNotFoundError, version
+import time
+import uuid
 from pathlib import Path
 
 import httpx
@@ -17,40 +17,84 @@ from ..workspace.literature import LiteratureStore
 from ..api.pubmed import PubMedClient
 from ..workspace.excel_export import export_xlsx
 from ..workspace.endnote_export import export_ris
+from ..workspace.project_transfer import read_project_file, preview_bundle, import_project, export_project
 from .rendering import rendering_preferences, set_rendering_preferences
 from .style_settings import style_settings, save_style_settings, validate_style_values
 from .development import DeveloperRepository
 from .model_settings import local_model_settings, save_local_model_settings
 from ..api.local_model import LocalModelClient, validate_model_settings, model_http_client
+from pubtool_core import CORE_VERSION, CORE_API_VERSION
+from pubtool_core.operations import update_preferences, runtime_info
 
 
 class DesktopService:
     """Explicit RPC allowlist shared by the desktop bridge and offline tests."""
 
-    def __init__(self, store: WorkspaceStore, root: Path, developer_mode: bool = False):
+    def __init__(self, store: WorkspaceStore, root: Path, developer_mode: bool = False, context=None):
         self.store, self.root = store, root
         self.developer_mode = developer_mode
+        self.context = context
         self.development = DeveloperRepository(root) if developer_mode else None
         self.literature = LiteratureStore(store)
+        self.project_imports = {}
 
     def call(self, action: str, payload: dict):
         if not isinstance(payload, dict):
             raise ValueError("請求內容必須為物件")
+        if action in {'load', 'save', 'history', 'history_preferences', 'set_history_preferences', 'delete_revision',
+                      'pubmed_search', 'pubmed_runs', 'pubmed_articles', 'pubmed_fetch', 'screen_article',
+                      'reading_html', 'export_excel', 'export_endnote', 'export_project', 'screening_history', 'undo_screening'}:
+            self.store.require_active_project(int(payload['project_id']))
         if action == "status":
             manifest = self.root / "release-manifest.json"
             release = json.loads(manifest.read_text("utf-8")) if manifest.exists() else {}
-            return {"version": release.get("version", "0.3.0-dev"),
+            with self.store._connect() as db:
+                schema_version = db.execute("PRAGMA user_version").fetchone()[0]
+            versions = self.context.version_fields() if self.context else {
+                "version": release.get("version", "0.3.2-dev"), "package_version": release.get("version", "0.3.2-dev"),
+                "core_version": CORE_VERSION, "core_api_version": CORE_API_VERSION}
+            return {**versions, "data_schema_version": schema_version,
                     "data_dir": str(self.store.path.parent), "database": str(self.store.path),
                     "update_repository": release.get("update_repository"),
                     "update_preferences_available": bool(os.getenv("PYAPPIFY_APP_JSON_PATH")),
                     "developer_mode": self.developer_mode,
                     "source_root": str(self.root) if self.developer_mode else None,
-                    "runtime": {"python": sys.version.split()[0], "executable": sys.executable, "pyside": _package_version("PySide6")},
+                    "runtime": runtime_info(),
+                    "core_dir": str(self.context.core_dir) if self.context else None,
                     "style_settings": style_settings(self.store),
                     "capabilities": {"resolver": True, "query_canvas": True, "pubmed_fetch": True},
                     "projects": self.store.list_projects()}
         if action == "projects":
             return self.store.list_projects()
+        if action == 'trashed_projects':
+            return self.store.list_trashed_projects()
+        if action == 'trash_project':
+            return self.store.trash_project(int(payload['project_id']))
+        if action == 'restore_project':
+            return self.store.restore_project(int(payload['project_id']))
+        if action == 'preview_project_import':
+            # The picker runs on the GUI thread; parsing runs in the worker.
+            bundle = read_project_file(payload['source'])
+            token = uuid.uuid4().hex
+            cutoff = time.monotonic() - 1800
+            self.project_imports = {key: item for key, item in self.project_imports.items() if item[0] > cutoff}
+            while len(self.project_imports) >= 4:
+                self.project_imports.pop(next(iter(self.project_imports)))
+            self.project_imports[token] = (time.monotonic(), bundle)
+            return {'token': token, 'filename': Path(payload['source']).name, **preview_bundle(bundle)}
+        if action == 'import_project':
+            token = payload.get('token')
+            if not isinstance(token, str) or token not in self.project_imports:
+                raise ValueError('匯入預覽已失效，請重新選擇檔案')
+            created, bundle = self.project_imports[token]
+            if time.monotonic() - created > 1800:
+                self.project_imports.pop(token)
+                raise ValueError('匯入預覽已過期，請重新選擇檔案')
+            result = import_project(self.store, bundle, payload.get('name'))
+            self.project_imports.pop(token)
+            return result
+        if action == 'export_project':
+            return export_project(self.store, int(payload['project_id']), payload['target'])
         if action == "rendering_preferences":
             return rendering_preferences(self.store.path.parent)
         if action == "local_model_settings":
@@ -103,7 +147,7 @@ class DesktopService:
             self.store.load(project_id)
             with httpx.Client(timeout=45) as client:
                 result = PubMedClient(client).search(payload['query'], payload.get('limit', 500))
-            run_id = self.literature.save_search(project_id, result)
+            run_id = self.literature.save_search(project_id, result, app_version=self.context.package_version if self.context else "0.3.2-dev")
             return {'run_id': run_id, 'count': result['count'], 'collected': len(result['pmids']), 'complete': result['complete']}
         if action == 'pubmed_runs':
             return self.literature.runs(int(payload['project_id']))
@@ -125,6 +169,10 @@ class DesktopService:
         if action == 'screen_article':
             self.literature.screen(int(payload['project_id']), int(payload['run_id']), payload['pmid'], payload['status'], payload.get('notes', ''), payload.get('reason', ''))
             return {'saved': True}
+        if action == 'screening_history':
+            return self.literature.screening_history(int(payload['project_id']), payload.get('limit', 25))
+        if action == 'undo_screening':
+            return self.literature.undo_screening(int(payload['project_id']), payload.get('event_id'))
         if action == 'reading_html':
             return self.literature.export_html(int(payload['project_id']), int(payload['run_id']), payload.get('only_kept') is True, payload.get('pmid'))
         if action == "create_project":
@@ -158,25 +206,8 @@ class DesktopService:
                 result = TermResolver(HttpxMeshProvider(client), HttpxPubChemProvider(client)).resolve(term, entity_type=entity_type)
             return _jsonable(result, verbose=True)
         if action == "update_preferences":
-            path = os.getenv("PYAPPIFY_APP_JSON_PATH")
-            if not path:
-                return {"available": False, "reason": "直接啟動原始碼；Git 更新由 pyappify 發行版啟動器管理。"}
-            from pyappify.app_config import AppConfigAPI
-            api = AppConfigAPI(path=path, watch=False)
-            method = payload.get("update_method")
-            if method is not None:
-                if method not in {"MANUAL_UPDATE", "AUTO_UPDATE", "AUTO_UPDATE_PRE_RELEASE"}:
-                    raise ValueError("不支援的更新模式")
-                api.update(update_method=method)
-            return {"available": True, **api.get()}
+            return update_preferences(payload)
         raise ValueError("不支援的操作")
-
-
-def _package_version(name: str) -> str | None:
-    try:
-        return version(name)
-    except PackageNotFoundError:
-        return None
 
 
 def pubmed_url(query: str) -> str:

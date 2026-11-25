@@ -20,7 +20,8 @@ from pathlib import Path
 
 SOURCE_PATHS = (
     ".gitignore", ".gitattributes", "README.md", "main.py", "main_debug.py",
-    "dev-version.json", "pyproject.toml", "requirements-desktop.txt", "pyappify.yml",
+    "dev-version.json", "pyproject.toml", "requirements-desktop.txt", "requirements-core.txt", "requirements-app.txt", "pyappify.yml",
+    "core-manifest.json", "app-manifest.json", "backend/pubtool_core",
     "backend/literature_app", "database", "docs", "tests", "tools", "packaging",
     "frontend/src", "frontend/public", "frontend/package.json", "frontend/package-lock.json",
     "frontend/tsconfig.json", "frontend/vite.config.ts", "frontend/debug.html", "frontend/dev-server.mjs",

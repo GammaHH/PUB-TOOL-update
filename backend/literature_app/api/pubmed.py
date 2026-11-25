@@ -38,7 +38,12 @@ def parse_articles(xml: str) -> list[ArticleRecord]:
             # itertext preserves nested italic/sup/sub text without truncating.
             sections.append({'label': part.get('Label') or part.get('NlmCategory') or '', 'text': text(part)})
         abstract = '\n\n'.join((p['label'] + ': ' if p['label'] else '') + p['text'] for p in sections)
-        ids = {p.get('IdType'): text(p) for p in item.findall('.//ArticleIdList/ArticleId')}
+        # Citation references can contain their own ArticleIdList. They do
+        # not identify the article returned for the requested PMID.
+        id_path = 'PubmedData/ArticleIdList/ArticleId' if item.tag == 'PubmedArticle' else 'BookDocument/ArticleIdList/ArticleId'
+        ids = {p.get('IdType'): text(p) for p in item.findall(id_path)}
+        if item.tag == 'PubmedBookArticle':
+            ids.update({p.get('IdType'): text(p) for p in item.findall('PubmedBookData/ArticleIdList/ArticleId')})
         authors = []
         for author in article.findall('AuthorList/Author'):
             name = text(author.find('CollectiveName')) or ' '.join(filter(None, [text(author.find('ForeName')), text(author.find('LastName'))]))

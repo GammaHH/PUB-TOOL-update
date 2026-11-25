@@ -1,0 +1,85 @@
+{
+  "format": 1,
+  "core_version": "0.4.0",
+  "core_api_version": 1,
+  "bootstrap_api_version": 1,
+  "environment": {
+    "python": "3.12",
+    "packages": {
+      "PySide6": "6.12.0",
+      "pyappify": "1.0.13"
+    }
+  },
+  "capabilities": [
+    "rpc",
+    "native.save_file",
+    "native.clipboard_html",
+    "native.open_url",
+    "lifecycle",
+    "webchannel",
+    "rendering",
+    "package.extensions"
+  ],
+  "files": [
+    {
+      "path": "bootstrap/main.py",
+      "sha256": "96311287681504d7aa3fd771b17c7faf47208f34f8f5ffcddc4440ed9aab3555",
+      "bytes": 2929
+    },
+    {
+      "path": "pubtool_core/__init__.py",
+      "sha256": "d47089e5845815d800034f39d022e0536f978ed1fd9ad84c7eea1761aee39bc6",
+      "bytes": 334
+    },
+    {
+      "path": "pubtool_core/api.py",
+      "sha256": "ce2ba49d71b79c569ec4cd669cad463c0bcd7a5edca55ed95d2a5886d73be4da",
+      "bytes": 3480
+    },
+    {
+      "path": "pubtool_core/bootstrap.py",
+      "sha256": "d7e5f3a7b1fa1d0c435b324ddecd63187b1c669b71434a7a8163456a9607590a",
+      "bytes": 2681
+    },
+    {
+      "path": "pubtool_core/host.py",
+      "sha256": "28e86a61e9bb1bdc8872d3ba8eb707e63d9d3332bf3c603e1808218326c12228",
+      "bytes": 12910
+    },
+    {
+      "path": "pubtool_core/installation.py",
+      "sha256": "ea5ac16828410c1519a5660d28464cafff81f5c8993d252ba9fb8651816117d5",
+      "bytes": 4285
+    },
+    {
+      "path": "pubtool_core/loader.py",
+      "sha256": "c43da0cd6d6500b60b66ae1e5ea9c178b3fa9e211e33259198aa975e6e12b657",
+      "bytes": 8079
+    },
+    {
+      "path": "pubtool_core/operations.py",
+      "sha256": "b2a22ac90f0564fc1eefc1eec718fc05c20cdf13b6d8474dfc7643ed66ef52e0",
+      "bytes": 1670
+    },
+    {
+      "path": "pubtool_core/paths.py",
+      "sha256": "8ef15c354107989ac99110df59283ead9f4c5d8a4b4f9eda7ede5a1ee151eaea",
+      "bytes": 586
+    },
+    {
+      "path": "pubtool_core/rendering.py",
+      "sha256": "7bed3f881cfc6c3e7d7fa5f576799193a831baf2e1d79368712ecb3b8fc917f4",
+      "bytes": 1916
+    },
+    {
+      "path": "pubtool_core/webchannel.py",
+      "sha256": "59d61c9828dae4b3016350051e66cade4534edcc4244e1a4f72870dd52647fc8",
+      "bytes": 1145
+    },
+    {
+      "path": "requirements-core.txt",
+      "sha256": "bdaf7e1af0305ea3fbc5a56c00b6373da970b9ccf55ae412e3b2917a4282d0c4",
+      "bytes": 105
+    }
+  ]
+}

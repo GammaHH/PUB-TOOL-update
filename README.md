@@ -18,6 +18,20 @@ updates are separate operations.
 
 ## Updates
 
+Core and feature packages have separate versions. The stable bootstrap uses
+`core-runtime/pubtool_core`; app routes live in `backend/literature_app`.
+The first split release includes the core. Later feature releases inherit the
+same core Git tree, so fresh installations also receive the frozen core without
+requiring every intermediate tag. Core files are verified and cached separately
+under the user data directory. A same-version core with different content is
+rejected. Settings shows core/API/application/schema versions independently.
+
+The application manifest declares core API/capabilities and database schema
+compatibility. Startup rejects incompatible packages before domain imports or
+migrations. Schema-0 legacy databases are backed up before schema-1 adoption.
+There is no automatic schema downgrade or failed-update rollback. Health records
+are diagnostic and do not automatically change the Launcher's selected tag.
+
 PyAppify checks Git tags in this repository. Stable versions use tags such as
 `v0.3.0`; preview versions use semantic-version prerelease tags. The launcher's
 stable automatic update mode excludes previews. Version rollback uses the

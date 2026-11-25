@@ -1,7 +1,12 @@
 {
   "format": 1,
-  "version": "0.3.1",
-  "created_utc": "2026-11-05T08:43:01.2892059Z",
+  "version": "0.3.2",
+  "package_version": "0.3.2",
+  "bootstrap_api_version": 1,
+  "core_version": "0.4.0",
+  "core_api_version": 1,
+  "data_schema_version": 1,
+  "created_utc": "2026-11-25T04:20:33.3112299Z",
   "update_repository": "https://github.com/GammaHH/PUB-TOOL-update.git",
   "distribution": {
     "debug_support_files": [
@@ -9,6 +14,10 @@
       "backend/literature_app/desktop/developer_ui.py"
     ],
     "developer_source_controls_enabled": false,
+    "package_kind": "full",
+    "core_included": true,
+    "core_manifest_sha256": "6f18a41f1aa0489ac62ca955701b7a59e6c70a33079c34ae3881319487b256e3",
+    "core_manifest_blob": "b918ded4578e4beebb13c5255255e1ba51795afe",
     "launcher_binary_included": false,
     "actions_workflows_included": false,
     "user_data_included": false
@@ -25,14 +34,19 @@
       "bytes": 78
     },
     {
+      "path": "app-manifest.json",
+      "sha256": "2100383e9d529e5c245025b3119ef8f7ffed387ce9ae75c09e044b8734134790",
+      "bytes": 692
+    },
+    {
       "path": "CHANGELOG.md",
       "sha256": "527cf6f27c9ff460b9a9cd7ee6d64297982b2036f3a13a0125d4d046091947d9",
       "bytes": 1760
     },
     {
       "path": "main.py",
-      "sha256": "cd151882a0d324d7bc9f956a7792460c0d03bb045209ae0d73bf9e987a062d36",
-      "bytes": 287
+      "sha256": "96311287681504d7aa3fd771b17c7faf47208f34f8f5ffcddc4440ed9aab3555",
+      "bytes": 2929
     },
     {
       "path": "pyappify.yml",
@@ -41,13 +55,23 @@
     },
     {
       "path": "README.md",
-      "sha256": "2f99d6fe1aa3237afafafe4c36770650242f44474cf8e828afbc7a5169193eb9",
-      "bytes": 3054
+      "sha256": "71bceaecdb9f312474749f943c2ddaf808780d23f4bcc6ad088c256b41433c78",
+      "bytes": 3987
+    },
+    {
+      "path": "requirements-app.txt",
+      "sha256": "f58203dd946ad1885df2b73123da71dd19f5f9bb4f78aafc169399c9d5e4d0ab",
+      "bytes": 102
+    },
+    {
+      "path": "requirements-core.txt",
+      "sha256": "bdaf7e1af0305ea3fbc5a56c00b6373da970b9ccf55ae412e3b2917a4282d0c4",
+      "bytes": 105
     },
     {
       "path": "requirements-desktop.txt",
-      "sha256": "da041e195405c8a81d41da70fd355f2e53d76a81804b5582c01fc3babf6fdf47",
-      "bytes": 151
+      "sha256": "4253827a9825f1808d83d1564a82971c460e104b08c11cb0979a759428af155f",
+      "bytes": 135
     },
     {
       "path": "backend/literature_app/__init__.py",
@@ -86,8 +110,8 @@
     },
     {
       "path": "backend/literature_app/api/pubmed.py",
-      "sha256": "2ff0e285b9bebda152a5a03a3320928882f10668a6800e9fbd1321990d993256",
-      "bytes": 6244
+      "sha256": "8d43413edf0538bdda73a845d23e68994675dd453e13fa00721e0fd9bb06d2d1",
+      "bytes": 6655
     },
     {
       "path": "backend/literature_app/api/reliability.py",
@@ -101,8 +125,8 @@
     },
     {
       "path": "backend/literature_app/database/connection.py",
-      "sha256": "a3573bcfb4528e32688b733bba47d26cbb2fdbb40035c676a5b03a85e8f44e8a",
-      "bytes": 604
+      "sha256": "8505b31eed042c800806c96c77dbd6d7afe504ca9261dd573973e8e41534b087",
+      "bytes": 1838
     },
     {
       "path": "backend/literature_app/desktop/__init__.py",
@@ -111,18 +135,18 @@
     },
     {
       "path": "backend/literature_app/desktop/app.py",
-      "sha256": "8704cef4753a9d130471c6bbb293d74a5da6509fa89b03cf2079bf26263ec90a",
-      "bytes": 13577
+      "sha256": "98fc3935bcf2fa3840f0ddb61c5cbacb8fd6d0875f405b72300d5e9dfe58cf0c",
+      "bytes": 269
     },
     {
       "path": "backend/literature_app/desktop/developer_ui.py",
-      "sha256": "f10ae9fec2211083f7304e338907b118bdbf24cfe8add3261f96766d85e03c7b",
-      "bytes": 18047
+      "sha256": "c83707865f7d236f1920fdd9f87be6abeee6c752f8157f856c142f48bfec27af",
+      "bytes": 18195
     },
     {
       "path": "backend/literature_app/desktop/development.py",
-      "sha256": "ca71b32d7504fb5ff63041ea37217975aa1ff0aa3782e79733a82cc635d3b1d3",
-      "bytes": 15079
+      "sha256": "dba97e4d697a6ba64927f0fa8672790a997087fd24d73490bc5948c22665047c",
+      "bytes": 15199
     },
     {
       "path": "backend/literature_app/desktop/model_settings.py",
@@ -130,14 +154,19 @@
       "bytes": 1128
     },
     {
+      "path": "backend/literature_app/desktop/package.py",
+      "sha256": "bc34bb5f0ff70e0b14197432e6bb358a0d0c78e9abe98ce3373bf71aa775c9d6",
+      "bytes": 6659
+    },
+    {
       "path": "backend/literature_app/desktop/rendering.py",
-      "sha256": "7bed3f881cfc6c3e7d7fa5f576799193a831baf2e1d79368712ecb3b8fc917f4",
-      "bytes": 1916
+      "sha256": "71e686b2037918471f224a7f3fb228308682bea11c268a470c1af1558f8dfdea",
+      "bytes": 168
     },
     {
       "path": "backend/literature_app/desktop/service.py",
-      "sha256": "ec22ac697bcf7a2a76b8b1cb8f7b928c97c6c2404febfdbc8c6a08219e653fd4",
-      "bytes": 10860
+      "sha256": "efdb8ef9f5c7275e272438e8ced588c4141f5043d7e4fc90dcb8800d90e68b0f",
+      "bytes": 13316
     },
     {
       "path": "backend/literature_app/desktop/style_settings.py",
@@ -146,8 +175,8 @@
     },
     {
       "path": "backend/literature_app/desktop/webchannel.py",
-      "sha256": "59d61c9828dae4b3016350051e66cade4534edcc4244e1a4f72870dd52647fc8",
-      "bytes": 1145
+      "sha256": "8027fa9c8903af42cb6998aed32647a6174186ed1f42c4e6eced5037dc6a4816",
+      "bytes": 135
     },
     {
       "path": "backend/literature_app/resolver/__init__.py",
@@ -186,8 +215,8 @@
     },
     {
       "path": "backend/literature_app/search/query_builder.py",
-      "sha256": "aec9a7f9dea9214e3e33e0f1e6096471b3be768b0acd8f25195e9c12800c9acb",
-      "bytes": 2109
+      "sha256": "44b27f20dc3c05001f3707b8213d745c30b911a7b0b0a908509c46235a0aebae",
+      "bytes": 2268
     },
     {
       "path": "backend/literature_app/search/tagging.py",
@@ -200,29 +229,109 @@
       "bytes": 76
     },
     {
+      "path": "backend/literature_app/workspace/bibliography_errors.py",
+      "sha256": "3b05db9074fff1e00886f51d71b033f0901009fffd7d9176e17d5ec5f0bc1369",
+      "bytes": 467
+    },
+    {
       "path": "backend/literature_app/workspace/endnote_export.py",
-      "sha256": "c3a6afe4d13c5531909d41d433dcf36feb05637b5402698c1e452408cc03fc76",
-      "bytes": 4629
+      "sha256": "8f401ac3ed437990ba635baf2daf2f31cf16f71f593520205fe01f55918f85a3",
+      "bytes": 4650
     },
     {
       "path": "backend/literature_app/workspace/excel_export.py",
-      "sha256": "1e92d1b9fa40d67f91e019e10b353a11c71631835fb90538f037d26617cdebca",
-      "bytes": 8003
+      "sha256": "86f891f3287f57e7123941f433b91abc2c25a6c319d5b33b23cb1f32efb54346",
+      "bytes": 7995
     },
     {
       "path": "backend/literature_app/workspace/graph.py",
-      "sha256": "bb3b85e8d849b6330f80c19a7296b42df8f5247d505ad6e1b290c2b4ec2b09ba",
-      "bytes": 9706
+      "sha256": "96342961dce105b33e0cf4e55e2efd3bab224f83588be6c51db8c0c464dec78e",
+      "bytes": 15486
     },
     {
       "path": "backend/literature_app/workspace/literature.py",
-      "sha256": "8e28126205f6b109dac5407a23ac968248699100943ae41f7393ff6e4e820c0b",
-      "bytes": 8066
+      "sha256": "42adef8a3ee0c7f73576102874f6c5166c98e80250d49646c3cfbeaae3936595",
+      "bytes": 10984
+    },
+    {
+      "path": "backend/literature_app/workspace/project_transfer.py",
+      "sha256": "c3bb4359eaaa67dc13c80c54c4aadc1c233512b5d96c36c9a93250d8afac0360",
+      "bytes": 20013
+    },
+    {
+      "path": "backend/literature_app/workspace/screening_history.py",
+      "sha256": "6d9e887d0ebabf837c9e2dca4ebc136f283bc382ebfea823cf3e781e9723b036",
+      "bytes": 4791
     },
     {
       "path": "backend/literature_app/workspace/store.py",
-      "sha256": "87fd8097b0a18c2e6243f8f45c4b4083c068906b35606dc8a8dc570d990d7d2a",
-      "bytes": 8333
+      "sha256": "dd542336a923dba6029189508f52805bec18ca079c2bc2b476ebbfa8ce801629",
+      "bytes": 10412
+    },
+    {
+      "path": "core-runtime/core-manifest.json",
+      "sha256": "6f18a41f1aa0489ac62ca955701b7a59e6c70a33079c34ae3881319487b256e3",
+      "bytes": 2406
+    },
+    {
+      "path": "core-runtime/requirements-core.txt",
+      "sha256": "bdaf7e1af0305ea3fbc5a56c00b6373da970b9ccf55ae412e3b2917a4282d0c4",
+      "bytes": 105
+    },
+    {
+      "path": "core-runtime/bootstrap/main.py",
+      "sha256": "96311287681504d7aa3fd771b17c7faf47208f34f8f5ffcddc4440ed9aab3555",
+      "bytes": 2929
+    },
+    {
+      "path": "core-runtime/pubtool_core/__init__.py",
+      "sha256": "d47089e5845815d800034f39d022e0536f978ed1fd9ad84c7eea1761aee39bc6",
+      "bytes": 334
+    },
+    {
+      "path": "core-runtime/pubtool_core/api.py",
+      "sha256": "ce2ba49d71b79c569ec4cd669cad463c0bcd7a5edca55ed95d2a5886d73be4da",
+      "bytes": 3480
+    },
+    {
+      "path": "core-runtime/pubtool_core/bootstrap.py",
+      "sha256": "d7e5f3a7b1fa1d0c435b324ddecd63187b1c669b71434a7a8163456a9607590a",
+      "bytes": 2681
+    },
+    {
+      "path": "core-runtime/pubtool_core/host.py",
+      "sha256": "28e86a61e9bb1bdc8872d3ba8eb707e63d9d3332bf3c603e1808218326c12228",
+      "bytes": 12910
+    },
+    {
+      "path": "core-runtime/pubtool_core/installation.py",
+      "sha256": "ea5ac16828410c1519a5660d28464cafff81f5c8993d252ba9fb8651816117d5",
+      "bytes": 4285
+    },
+    {
+      "path": "core-runtime/pubtool_core/loader.py",
+      "sha256": "c43da0cd6d6500b60b66ae1e5ea9c178b3fa9e211e33259198aa975e6e12b657",
+      "bytes": 8079
+    },
+    {
+      "path": "core-runtime/pubtool_core/operations.py",
+      "sha256": "b2a22ac90f0564fc1eefc1eec718fc05c20cdf13b6d8474dfc7643ed66ef52e0",
+      "bytes": 1670
+    },
+    {
+      "path": "core-runtime/pubtool_core/paths.py",
+      "sha256": "8ef15c354107989ac99110df59283ead9f4c5d8a4b4f9eda7ede5a1ee151eaea",
+      "bytes": 586
+    },
+    {
+      "path": "core-runtime/pubtool_core/rendering.py",
+      "sha256": "7bed3f881cfc6c3e7d7fa5f576799193a831baf2e1d79368712ecb3b8fc917f4",
+      "bytes": 1916
+    },
+    {
+      "path": "core-runtime/pubtool_core/webchannel.py",
+      "sha256": "59d61c9828dae4b3016350051e66cade4534edcc4244e1a4f72870dd52647fc8",
+      "bytes": 1145
     },
     {
       "path": "database/schema.sql",
@@ -231,18 +340,23 @@
     },
     {
       "path": "frontend/dist/app.css",
-      "sha256": "3298ea824c1e7d52ab1257ee59a9d4ae50403e153084fb506846d3eaf6820038",
-      "bytes": 42950
+      "sha256": "7d4dbfd17508b399d6ce2b705fd11f457268c11c80dacbecaeb78d62f50d5dc8",
+      "bytes": 48822
     },
     {
       "path": "frontend/dist/app.js",
-      "sha256": "a00c5c52e2c019b4fed148e5be7b46cd0fa5405c82f2a3988590d2abc8744110",
-      "bytes": 388416
+      "sha256": "0998c5786e3b952357d2bc834400b0951fc9085c47e073d2511b574cb3b7ffdb",
+      "bytes": 418584
     },
     {
       "path": "frontend/dist/index.html",
       "sha256": "e96fa672b90d1d667c83b7b4e6e2a7475d95d5bc89ab22a62fabbea6cf0d6c54",
       "bytes": 544
+    },
+    {
+      "path": "frontend/dist/ui-contract.json",
+      "sha256": "57a81279227cf337a69771bd3c7d83910e8e9b591902b7c4abc571c1e49aaead",
+      "bytes": 452
     },
     {
       "path": "frontend/dist/branding/PUBTOOL_LOGO.png",

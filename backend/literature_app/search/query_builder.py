@@ -1,6 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 
+PUBMED_LITERAL_FIELDS = frozenset({"all", "tiab", "ti", "tw", "mh", "majr", "pa", "pt", "au", "jt", "ad", "la", "nm"})
+
 def _normalize_term(value: str) -> str:
     """Normalize one user/provider term while keeping PubMed quoting balanced."""
     cleaned = " ".join(value.strip().split())
@@ -15,7 +17,7 @@ def _normalize_term(value: str) -> str:
 
 def format_pubmed_term(value: str, field: str) -> str:
     """Format every PubMed term with one explicit quoted value and field tag."""
-    if field not in {"MeSH Terms", "Title/Abstract"}:
+    if field not in PUBMED_LITERAL_FIELDS and field not in {"MeSH Terms", "Title/Abstract"}:
         raise ValueError(f"unsupported PubMed field: {field}")
     return f'"{_normalize_term(value)}"[{field}]'
 
